@@ -7,7 +7,7 @@ def main():
     root.withdraw()
 
     pdf_path = filedialog.askopenfilename(
-        title = 'Selecione o arquivo pdf',
+        title = 'Selecione o CNIS (pdf)',
         filetypes = (('arquivos pdf','*.pdf'),('todos os arquivos','*.*'))
         #initialdir='/home/bernardo/Área de Trabalho',
     ) 
@@ -39,3 +39,4 @@ def main():
     
 if __name__ == '__main__':
     main()
+    input('Arquivo salvo. ENTER para sair')
