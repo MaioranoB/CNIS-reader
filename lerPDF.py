@@ -1,10 +1,9 @@
-import pandas as pd
-#import numpy as np
 import re
 from collections import namedtuple
 import pdfplumber
 from time import time
 from tqdm import tqdm
+import xlsxwriter
 
 re_seq = re.compile(r'^\d+')
 re_nit = re.compile(r'\d{3}\.\d{5}\.\d{2}-\d')
@@ -24,7 +23,7 @@ re_contrib = re.compile(r'(\d{2}/\d{4}) (\d{2}/\d{2}/\d{4}) (\d+[0-9\.]*,\d{2}) 
 #idTuple = namedtuple('idTuple','emissao nit data_nascimento cpf nome nome_mae')
 ntupleSEQ = namedtuple('ntupleSEQ','seq nit codigo origem data1 data2 tipo ultRemu indicadores nb especie situacao')
 ntupleREMU = namedtuple('ntupleREMU','competencia remu_ou_SalarioContrib contribuicao dataPgto indicadores')
-NamedTuple = namedtuple('NamedTuple', 'seq nit codigo origem data1 data2 tipo ultRemu indicadores nb especie situacao competencia remu_ou_SalarioContrib contribuicao dataPgto indicadores2')
+NamedTuple = namedtuple('NamedTuple', 'seq nit codigo origem data1 data2 tipo ultRemu indicadores nb especie situacao vazio competencia remu_ou_SalarioContrib contribuicao dataPgto indicadores2')
 
 INDICADORES = ["PADM-EMPR","PREM-EMPR","PREM-FVIN","PREM-EXT","PREC-MENOR-MIN","PRES-EMPR","PADM-EMPR"]
 
@@ -70,7 +69,7 @@ def readPDF(pdf_path):
 
     #t1 = time()
     seqs = []
-    for i,linha in enumerate(texto):
+    for i,linha in enumerate(tqdm(texto,desc = 'Extraindo informações')):
         if linha.startswith("Seq. NIT"):
             
             seq = get_seqID(texto[i+1:i+3]) #mandar as duas proximas linhas(as vezes ocupa duas linhas)
@@ -110,7 +109,7 @@ def readPDF(pdf_path):
             elif texto[i + 2].startswith("Seq. NIT") or texto[i + 3].startswith("Seq. NIT"): #seqs sem remu
                 
                 _seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao = seq
-                seq_sem_remu = NamedTuple(_seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao,'','','','','')
+                seq_sem_remu = NamedTuple(_seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao,'','','','','','')
                 seqs.append(seq_sem_remu)
 
             else:   #seq do tipo Benefício nao tem remuneraçao/contribuiçao?
@@ -125,7 +124,7 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
     codigo,tipo,ultRemu,indicadores,nb,especie,situacao = '','','','','','',''
 
     
-    seq = re_seq.search(linha1).group()
+    seq = int(re_seq.search(linha1).group())
     nit = re_nit.search(linha1).group()
     data1,data2 = re_datas.findall(linha1)[0] #se nao achar a data2 retorna ['data1', '']
     
@@ -165,7 +164,7 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
         #seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores = match[0]
 
 
-    #return NamedTuple(seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao,'','','','','')
+    
     return ntupleSEQ(seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao)
 
 def get_remuneracoes(linhas,seqID): #retorna as remus com os dados da seq antes de cada uma 
@@ -176,7 +175,9 @@ def get_remuneracoes(linhas,seqID): #retorna as remus com os dados da seq antes 
         matches = re_remu.findall(linha) #cada linha pode ter tres remuneraçoes
         for match in matches:
             competencia,remu_ou_SalarioContrib,indicador = match
-            lista_remu.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,competencia,remu_ou_SalarioContrib,'','',indicador)) 
+
+            remu_ou_SalarioContrib = remu_ou_SalarioContrib.replace('.','').replace(',','.')
+            lista_remu.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,'',competencia,remu_ou_SalarioContrib,'','',indicador)) 
 
     return lista_remu
 
@@ -188,26 +189,28 @@ def get_contribuicoes(linhas,seqID):
         matches = re_contrib.findall(linha) #cada linha pode ter duas contribs
         for match in matches:
             competencia,data_pgto,contribuicao,remu_ou_SalarioContrib,indicadores = match
-            lista_contribs.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,competencia,remu_ou_SalarioContrib,contribuicao,data_pgto,indicadores))
+
+            contribuicao = contribuicao.replace('.','').replace(',','.')
+            remu_ou_SalarioContrib = remu_ou_SalarioContrib.replace('.','').replace(',','.')
+            lista_contribs.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,'',competencia,remu_ou_SalarioContrib,contribuicao,data_pgto,indicadores))
             
     return lista_contribs
 
 def to_exel(id_filiado,seqs,save_path):
-    idDF = pd.DataFrame(data = id_filiado, index = ['Emissão','NIT','Data de Nascimento','CPF','Nome','Nome da mãe'] )
-    seqsDF = pd.DataFrame(seqs)
+    workbook = xlsxwriter.Workbook(save_path,{'strings_to_numbers': True}) #'default_date_format', None
+    bold = workbook.add_format({'bold': 1})
     
-    seqsDF['remu_ou_SalarioContrib'] = seqsDF['remu_ou_SalarioContrib'].map(lambda x: (str(x).replace('.','').replace(',','.')))
-    seqsDF['contribuicao'] = seqsDF['contribuicao'].map(lambda x: (str(x).replace('.','').replace(',','.')))
+    id_sheet = workbook.add_worksheet('ID')
+    seqs_sheet = workbook.add_worksheet('Sequencias')
+    
+    id_column_index = ['Emissão','NIT','Data de Nascimento','CPF','Nome','Nome da mãe']
+    seq_row_index = ["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","/","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]
+    
+    id_sheet.write_column(0,0,id_column_index,bold)
+    id_sheet.write_column(0,1,id_filiado)
+    
+    seqs_sheet.write_row(0,0,seq_row_index,bold)
+    for i in tqdm(range(len(seqs)), desc = 'Escrevendo a planilha'):
+        seqs_sheet.write_row(i+1,0,seqs[i])
 
-    seqsDF['seq'] = pd.to_numeric(seqsDF['seq'])
-    seqsDF['remu_ou_SalarioContrib'] = pd.to_numeric(seqsDF['remu_ou_SalarioContrib'])
-    seqsDF['contribuicao'] = pd.to_numeric(seqsDF['contribuicao'])
-    seqsDF.columns = ["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]
-    seqsDF['/'] = ''
-    seqsDF = seqsDF[["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","/","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]]
-    
-    
-    writer = pd.ExcelWriter(save_path, engine = 'xlsxwriter')
-    idDF.to_excel(writer,sheet_name = 'ID')
-    seqsDF.to_excel(writer,sheet_name = 'Sequencias',index = False)
-    writer.save()
+    workbook.close()
