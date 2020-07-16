@@ -1,8 +1,8 @@
-def main():
-    import tkinter as tk
-    from tkinter import filedialog
-    from lerPDF import readPDF,to_exel
+import tkinter as tk
+from tkinter import filedialog
+from lerPDF import readPDF,to_exel
 
+def main():
     root = tk.Tk()
     root.withdraw()
 
