@@ -12,7 +12,9 @@ def main():
         #initialdir='/home/bernardo/Área de Trabalho',
     ) 
 
-    if pdf_path[-4:] != '.pdf':
+    if pdf_path == ():
+        return
+    elif pdf_path[-4:] != '.pdf':
         print(pdf_path)
         print('Arquivo Inválido!')
         return
@@ -22,11 +24,18 @@ def main():
         print('Não foi possível ler o pdf\nExtrato Previdenciário não encontrado!')
         return
 
-    saveasfilename = filedialog.asksaveasfilename()
-    to_exel(id_filiado,seqs,saveasfilename)
+    while True:
+        saveasfilename = filedialog.asksaveasfilename(filetypes = (('*.xlsx','*.xlsx'),('todos os arquivos','*.*')))
+        
+        if '.xls' in saveasfilename:
+            to_exel(id_filiado,seqs,saveasfilename)
+            break
+        elif saveasfilename == '' or saveasfilename == ():
+            break
+        else:
+            print('Formato inválido. Escolha uma extensão .xlsx ou .xls')
+    
 
     
 if __name__ == '__main__':
     main()
-
-#FAZER A PARADA DA BARRA DE PROGRESSO?
