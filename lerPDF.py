@@ -4,6 +4,7 @@ import re
 from collections import namedtuple
 import pdfplumber
 from time import time
+from tqdm import tqdm
 
 re_seq = re.compile(r'^\d+')
 re_nit = re.compile(r'\d{3}\.\d{5}\.\d{2}-\d')
@@ -29,23 +30,23 @@ INDICADORES = ["PADM-EMPR","PREM-EMPR","PREM-FVIN","PREM-EXT","PREC-MENOR-MIN","
 
 
 def extract_text(pdf_path):
-    t1 = time()
+    #t1 = time()
     with pdfplumber.open(pdf_path) as pdf:
         #Garantir que o pdf é válido antes de tudo
         pag1 = pdf.pages[0].extract_text()
         if pag1 == None or "Extrato Previdenciário" not in pag1:
-            return False
+            return False,False
 
         #Ler o cabeçalho e agrupar todas as pags do pdf
         pag1 = pag1.split("\n")
         id_filiado = get_id(pag1) #retorna (emissao,nit,data_nascimento,cpf,nome,nome_mae)
         texto = pag1[9:-1] #ignorar o cabeçalho e o rodape
-        for i in range(1,len(pdf.pages)):
+        for i in tqdm(range(1,len(pdf.pages)), desc = "Extraindo texto do pdf"):
             pagina = pdf.pages[i].extract_text().split("\n")
             texto += pagina[9:-1]
         pdf.close()
         
-    print(f'Tempo de extrair todo o texto do pdf: {time()-t1} segundos')
+    #print(f'Tempo de extrair todo o texto do pdf: {time()-t1} segundos')
     return id_filiado,texto
 
 def get_id(pag_lista):
@@ -62,10 +63,12 @@ def get_id(pag_lista):
     return emissao,nit,data_nascimento,cpf,nome,nome_mae
 
 def readPDF(pdf_path):
-    if extract_text(pdf_path) == False:
-        return False,False
     id_filiado,texto = extract_text(pdf_path)
-    t1 = time()
+
+    if id_filiado == False:
+        return False,False
+
+    #t1 = time()
     seqs = []
     for i,linha in enumerate(texto):
         if linha.startswith("Seq. NIT"):
@@ -112,7 +115,7 @@ def readPDF(pdf_path):
 
             else:   #seq do tipo Benefício nao tem remuneraçao/contribuiçao?
                 print("ERRO readPDF()")
-    print(f'Tempo de ler o todas as seqs: {time()-t1} segundos')
+    #print(f'Tempo de ler o todas as seqs: {time()-t1} segundos')
     return id_filiado,seqs
 
 def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indicadores,nb,especie,situacao
@@ -203,7 +206,8 @@ def to_exel(id_filiado,seqs,save_path):
     seqsDF['/'] = ''
     seqsDF = seqsDF[["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","/","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]]
     
-    writer = pd.ExcelWriter(save_path + '.xlsx', engine = 'xlsxwriter')
+    
+    writer = pd.ExcelWriter(save_path, engine = 'xlsxwriter')
     idDF.to_excel(writer,sheet_name = 'ID')
     seqsDF.to_excel(writer,sheet_name = 'Sequencias',index = False)
     writer.save()
