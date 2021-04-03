@@ -4,7 +4,6 @@ from tqdm import tqdm
 from constants import *
 
 def extract_text(pdf_path):
-    #t1 = time()
     with pdfplumber.open(pdf_path) as pdf:
         #Garantir que o pdf é válido antes de tudo
         pag1 = pdf.pages[0].extract_text()
@@ -20,7 +19,6 @@ def extract_text(pdf_path):
             texto += pagina[9:-1]
         pdf.close()
         
-    #print(f'Tempo de extrair todo o texto do pdf: {time()-t1} segundos')
     return id_filiado,texto
 
 def get_id(pag_lista):
@@ -42,7 +40,6 @@ def readPDF(pdf_path):
     if id_filiado == False:
         return False,False
 
-    #t1 = time()
     seqs = []
     for i,linha in enumerate(texto):
         if linha.startswith("Seq. NIT"):
@@ -89,7 +86,7 @@ def readPDF(pdf_path):
 
             else:   #seq do tipo Benefício nao tem remuneraçao/contribuiçao?
                 print("ERRO readPDF()")
-    #print(f'Tempo de ler o todas as seqs: {time()-t1} segundos')
+
     return id_filiado,seqs
 
 def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indicadores,nb,especie,situacao
@@ -97,7 +94,6 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
     linha2 = linhas[1]
 
     codigo,tipo,ultRemu,indicadores,nb,especie,situacao = '','','','','','',''
-
     
     seq = re_seq.search(linha1).group()
     nit = re_nit.search(linha1).group()
@@ -123,9 +119,13 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
         
     elif 'Benefício' in linha1:
         origem = 'Benefício'
-        situacao = 'CESSADO' #mudar isso dps
+        if 'CESSADO' in linha1: situacao = 'CESSADO' #mudar isso dps 
+        elif 'ATIVO' in linha1: situacao = 'ATIVO'
+        else: print('Seq.{}: situação não mapeada'.format(seq))
+
         nb = re_nb.search(linha1).group()
         especie = re_especie.search(linha1).group()
+        if linha2.isupper(): especie+= linha2
         
     else:
         codigo = re_codigo.search(linha1) or re_codigo2.search(linha1) #alguns codigos estao com um padrao diferente
@@ -140,35 +140,25 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
         if ultRemu:
             ultRemu = ultRemu.group()
         else: ultRemu = ''
-        #match = re_SEQ.findall(linha1)
-        #seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores = match[0]
 
-
-    #return NamedTuple(seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao,'','','','','')
     return ntupleSEQ(seq,nit,codigo,origem,data1,data2,tipo,ultRemu,indicadores,nb,especie,situacao)
 
 def get_remuneracoes(linhas,seqID): #retorna as remus com os dados da seq antes de cada uma 
-    a,b,c,d,e,f,g,h,i,j,k,l = seqID
-    
     lista_remu = []
     for linha in linhas: 
         matches = re_remu.findall(linha) #cada linha pode ter tres remuneraçoes
         for match in matches:
             competencia,remu_ou_SalarioContrib,indicador = match
-            lista_remu.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,competencia,remu_ou_SalarioContrib,'','',indicador)) 
-
+            lista_remu.append(NamedTuple(*seqID,competencia,remu_ou_SalarioContrib,'','',indicador)) 
     return lista_remu
 
 def get_contribuicoes(linhas,seqID):
-    a,b,c,d,e,f,g,h,i,j,k,l = seqID
-
     lista_contribs = []
     for linha in linhas: 
         matches = re_contrib.findall(linha) #cada linha pode ter duas contribs
         for match in matches:
             competencia,data_pgto,contribuicao,remu_ou_SalarioContrib,indicadores = match
-            lista_contribs.append(NamedTuple(a,b,c,d,e,f,g,h,i,j,k,l,competencia,remu_ou_SalarioContrib,contribuicao,data_pgto,indicadores))
-            
+            lista_contribs.append(NamedTuple(*seqID,competencia,remu_ou_SalarioContrib,contribuicao,data_pgto,indicadores))        
     return lista_contribs
 
 def to_exel(id_filiado,seqs,save_path):
@@ -182,9 +172,7 @@ def to_exel(id_filiado,seqs,save_path):
     seqsDF['remu_ou_SalarioContrib'] = pd.to_numeric(seqsDF['remu_ou_SalarioContrib'])
     seqsDF['contribuicao'] = pd.to_numeric(seqsDF['contribuicao'])
     seqsDF.columns = ["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]
-    seqsDF['/'] = ''
-    seqsDF = seqsDF[["Seq","NIT","Código Emp.","Origem do Vinculo","Data Início","Data Fim","Tipo Filiado no Vínculo","Últ. Remun.","Indicadores","NB","Espécie","Situação","/","Competência","Remuneração ou Salário Contribuição","Contribuição","Data pgto","Indicadores2"]]
-    
+    seqsDF.insert(12, '/', '') #
     
     writer = pd.ExcelWriter(save_path, engine = 'xlsxwriter')
     idDF.to_excel(writer,sheet_name = 'ID')

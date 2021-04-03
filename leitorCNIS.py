@@ -9,7 +9,6 @@ def main():
     pdf_path = filedialog.askopenfilename(
         title = 'Selecione o arquivo pdf',
         filetypes = (('arquivos pdf','*.pdf'),('todos os arquivos','*.*'))
-        #initialdir='/home/bernardo/Área de Trabalho',
     ) 
 
     if pdf_path == ():
@@ -35,7 +34,6 @@ def main():
         else:
             print('Formato inválido. Escolha uma extensão .xlsx ou .xls')
     
-
 
 if __name__ == '__main__':
     main()
