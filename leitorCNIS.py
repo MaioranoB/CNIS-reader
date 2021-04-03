@@ -36,6 +36,7 @@ def main():
             print('Formato inválido. Escolha uma extensão .xlsx ou .xls')
     
 
-    
+
 if __name__ == '__main__':
     main()
+    input('\nENTER para sair')

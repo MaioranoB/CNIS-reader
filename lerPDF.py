@@ -3,12 +3,13 @@ import pandas as pd
 import re
 from collections import namedtuple
 import pdfplumber
-from time import time
+# from time import time
 from tqdm import tqdm
 
 re_seq = re.compile(r'^\d+')
 re_nit = re.compile(r'\d{3}\.\d{5}\.\d{2}-\d')
 re_codigo = re.compile(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}')
+re_codigo2 =re.compile(r'\d{2}\.\d{3}\.\d{3}')
 re_origem = re.compile(r'[A-Z]+[A-Z \.-]+')
 re_datas = re.compile(r'(\d{2}/\d{2}/\d{4})( \d{2}/\d{2}/\d{4})?')
 re_tipo = re.compile(r'[A-Z]{1}[a-z]+\s?[A-Z]?[a-z]+')
@@ -121,7 +122,7 @@ def readPDF(pdf_path):
 def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indicadores,nb,especie,situacao
     linha1 = linhas[0]
     linha2 = linhas[1]
-    
+
     codigo,tipo,ultRemu,indicadores,nb,especie,situacao = '','','','','','',''
 
     
@@ -154,7 +155,12 @@ def get_seqID(linhas): #seq,nit,codigo,origem,data1,data2,tipo,ultima_remu,indic
         especie = re_especie.search(linha1).group()
         
     else:
-        codigo = re_codigo.search(linha1).group()
+        codigo = re_codigo.search(linha1) or re_codigo2.search(linha1) #alguns codigos estao com um padrao diferente
+        if codigo:
+            codigo = codigo.group()
+        else:
+            codigo = 'codigo nao encontrado' 
+
         origem = re_origem.search(linha1).group() + final_origem
         tipo = re_tipo.search(linha1).group()
         ultRemu = re_ultRemu.search(linha1)
